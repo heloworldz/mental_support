@@ -16,11 +16,11 @@ st.set_page_config(page_title="Mental Health Chatbot", layout="centered")
 # --- Load model ---
 @st.cache_resource
 def load_model():
-    return pipeline(
-        "text-generation",
-        model="distilgpt2",
-        tokenizer="distilgpt2",
-        use_auth_token=hf_token
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2", use_auth_token=hf_token)
+    model = AutoModelForCausalLM.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2", use_auth_token=hf_token, device_map="auto")
+    return pipeline("text-generation", model=model, tokenizer=tokenizer)
+
     )
 
 generator = load_model()
@@ -35,24 +35,23 @@ def is_sensitive_message(msg):
 
 # --- Generate safe AI response ---
 def generate_safe_response(user_input):
-    safe_prompt = f"""You are a supportive mental health assistant.
-Respond with empathy and care.
-Do NOT repeat the user's message. Instead, offer kind, encouraging words.
+    safe_prompt = f"""<s>[INST] You are a supportive and empathetic mental health assistant.
+Provide kind, non-judgmental support. Do NOT repeat the user's message. Be gentle and hopeful.
 
 User: {user_input}
-Assistant:"""
+[/INST]"""
 
-    raw_output = generator(
+    output = generator(
         safe_prompt,
-        max_length=150,
+        max_new_tokens=150,
         do_sample=True,
-        temperature=0.8,
-        pad_token_id=50256  # for distilgpt2
+        temperature=0.7,
+        top_p=0.95
     )[0]['generated_text']
 
-    # Remove user input from AI response if echoed
-    reply = raw_output.split("Assistant:")[-1].strip()
+    reply = output.split("[/INST]")[-1].strip()
     return reply.replace(user_input, "").strip()
+
 
 # --- UI Elements ---
 st.title("🧠 Mental Health Chatbot")
