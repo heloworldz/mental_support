@@ -35,26 +35,24 @@ def query_model(user_input: str) -> str:
     payload = {
         "inputs": prompt,
         "parameters": {
-            "max_new_tokens": 150,
-            "temperature": 0.7,
-            "top_p": 0.9,
+            "max_new_tokens": 120,
+            "temperature": 0.3,
+            "top_p": 0.85,
             "stop": ["User:", "\n\n"]
         }
     }
     response = requests.post(MODEL_API_URL, headers=HEADERS, json=payload, timeout=40)
     response.raise_for_status()
     result = response.json()
-    # The model response usually contains 'generated_text' field
     text = result[0].get("generated_text", "")
     reply = text.split("Assistant:")[-1].strip()
-    # Remove any echo of user input
     return reply.replace(user_input, "").strip() or "I'm here to listen."
 
 # ----------- Streamlit UI -----------------
 
 st.set_page_config(page_title="AI Mental Health Chatbot", layout="centered")
 st.title("🧠 AI Mental Health Chatbot")
-st.caption("Supportive, non-clinical conversation. For emergencies call your local helpline.")
+st.caption("Supportive, non-clinical conversation. For emergencies, call your local helpline.")
 
 user_message = st.text_input("Type your message here:")
 
