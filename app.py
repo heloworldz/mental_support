@@ -8,6 +8,8 @@ load_dotenv()  # You can add path='src/.env' if your .env is inside src folder
 
 # Get your HF API token from environment variable
 HF_TOKEN = os.getenv("HF_TOKEN")
+st.write("Token loaded?", bool(HF_TOKEN))
+st.write("Token preview:", HF_TOKEN[:5] + "..." if HF_TOKEN else "No token found")
 
 if not HF_TOKEN:
     st.error("Hugging Face API token is not set in environment variable HF_TOKEN.")
