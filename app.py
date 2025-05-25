@@ -3,6 +3,8 @@ import requests
 import json
 import re
 from textblob import TextBlob
+import nltk
+nltk.download('punkt')
 
 # -------------- Config -------------------
 HF_TOKEN = st.secrets["HF_TOKEN"]
