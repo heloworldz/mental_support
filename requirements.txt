@@ -1,6 +1,7 @@
 streamlit
 transformers
+torch
 textblob
 speechrecognition
-numpy
 scipy
+numpy
