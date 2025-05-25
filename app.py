@@ -33,7 +33,7 @@ audio_file = st.file_uploader("Upload a WAV audio file", type=["wav"])
 text = ""
 
 if audio_file is not None:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+    with tempfile.NamedTemporaryFile(dir="/tmp", delete=False, suffix=".wav") as tmp_file:
         tmp_file.write(audio_file.read())
         tmp_path = tmp_file.name
 
@@ -65,9 +65,12 @@ if show_sentiment and user_input:
 # Chatbot response
 if user_input:
     with st.spinner("Thinking..."):
-        response = generator(user_input, max_length=100, do_sample=True, temperature=0.7)[0]['generated_text']
-        st.markdown("### 🤖 AI Response")
-        st.write(response)
+        try:
+            response = generator(user_input, max_length=100, do_sample=True, temperature=0.7)[0]['generated_text']
+            st.markdown("### 🤖 AI Response")
+            st.write(response)
+        except Exception as e:
+            st.error(f"Model error: {e}")
 
 # Affirmations
 if show_affirmations:
