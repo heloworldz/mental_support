@@ -12,7 +12,13 @@ import speech_recognition as sr
 # ─────────────────────────────  CONFIG  ───────────────────────────────────────
 HF_TOKEN   = st.secrets["HF_TOKEN"]          # add in Settings ▸ Secrets
 MODEL_URL  = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+import streamlit.components.v1 as components
 
+iframe_code = """
+<iframe width="350" height="430" allow="microphone;" src="https://console.dialogflow.com/api-client/demo/embedded/ed9b9860-dcca-4d24-b281-d979cb1cb3e7"></iframe>
+"""
+
+components.html(iframe_code, height=450)
 st.set_page_config(page_title="Mental Health Chatbot", layout="centered")
 st.title("🧠 Mental Health Chatbot")
 st.caption("This tool offers supportive, non-clinical conversation. "
