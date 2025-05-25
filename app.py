@@ -1,148 +1,144 @@
-import os
+###############################################################################
+#  mental_health_chatbot.py  –  SAFE VERSION  (Streamlit 1.34+)
+###############################################################################
+import os, re, json, tempfile, requests
 os.environ["XDG_CONFIG_HOME"] = "/tmp"
 
 import streamlit as st
-from transformers import pipeline
 from textblob import TextBlob
 import numpy as np
 import speech_recognition as sr
-import tempfile
 
-# Hugging Face token (securely stored in Streamlit secrets)
-hf_token = st.secrets["hf_token"]
+# ─────────────────────────────  CONFIG  ───────────────────────────────────────
+HF_TOKEN   = st.secrets["HF_TOKEN"]          # add in Settings ▸ Secrets
+MODEL_URL  = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
 
 st.set_page_config(page_title="Mental Health Chatbot", layout="centered")
-
-# --- Load model ---
-@st.cache_resource
-def load_model():
-    from transformers import AutoTokenizer, AutoModelForCausalLM
-    tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2", use_auth_token=hf_token)
-    model = AutoModelForCausalLM.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2", use_auth_token=hf_token, device_map="auto")
-    return pipeline("text-generation", model=model, tokenizer=tokenizer)
-
-    )
-
-generator = load_model()
-
-# --- Crisis/Sensitive message check ---
-def is_sensitive_message(msg):
-    crisis_keywords = [
-        "kill myself", "end my life", "suicide",
-        "i want to die", "don’t want to live", "i hate my life"
-    ]
-    return any(kw in msg.lower() for kw in crisis_keywords)
-
-# --- Generate safe AI response ---
-def generate_safe_response(user_input):
-    safe_prompt = f"""<s>[INST] You are a supportive and empathetic mental health assistant.
-Provide kind, non-judgmental support. Do NOT repeat the user's message. Be gentle and hopeful.
-
-User: {user_input}
-[/INST]"""
-
-    output = generator(
-        safe_prompt,
-        max_new_tokens=150,
-        do_sample=True,
-        temperature=0.7,
-        top_p=0.95
-    )[0]['generated_text']
-
-    reply = output.split("[/INST]")[-1].strip()
-    return reply.replace(user_input, "").strip()
-
-
-# --- UI Elements ---
 st.title("🧠 Mental Health Chatbot")
+st.caption("This tool offers supportive, non-clinical conversation. "
+           "For emergencies call your local helpline.")
 
-# Initialize session state
-for key in ["last_input", "show_sentiment", "show_affirmations", "show_meditation"]:
-    if key not in st.session_state:
-        st.session_state[key] = False if key.startswith("show_") else ""
+# ─────────────────────────  SESSION STATE  ────────────────────────────────────
+for k in ("last_input", "show_sentiment", "show_affirmations", "show_meditation"):
+    st.session_state.setdefault(k, False if k.startswith("show_") else "")
 
-# Sidebar toggles
+# ───────────────────────────  SIDEBAR  ────────────────────────────────────────
 st.sidebar.title("🛠️ Tools")
-st.session_state.show_sentiment = st.sidebar.checkbox("Show Sentiment", value=st.session_state.show_sentiment)
-st.session_state.show_affirmations = st.sidebar.checkbox("Show Positive Affirmations", value=st.session_state.show_affirmations)
-st.session_state.show_meditation = st.sidebar.checkbox("Show Guided Meditation", value=st.session_state.show_meditation)
+st.session_state.show_sentiment     = st.sidebar.checkbox("Show sentiment",         st.session_state.show_sentiment)
+st.session_state.show_affirmations  = st.sidebar.checkbox("Positive affirmations",  st.session_state.show_affirmations)
+st.session_state.show_meditation    = st.sidebar.checkbox("Guided meditation",      st.session_state.show_meditation)
 
-# --- Voice Input ---
-st.subheader("🎤 Voice Input")
-audio_file = st.file_uploader("Upload a WAV audio file", type=["wav"])
-text = ""
+# ───────────────────────  CRISIS DETECTION  ───────────────────────────────────
+CRISIS_PAT  = re.compile(r"\b("
+    r"kill\s+myself|suicid(?:e|al)|end\s+my\s+life|die\s+by\s+suicide|"
+    r"don'?t\s+want\s+to\s+live|take\s+my\s+own\s+life|hurt\s+myself"
+")\b", re.I)
 
-if audio_file is not None:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-        tmp_file.write(audio_file.read())
-        tmp_path = tmp_file.name
+def in_crisis(msg:str)->bool:
+    return bool(CRISIS_PAT.search(msg))
 
-    recognizer = sr.Recognizer()
-    with sr.AudioFile(tmp_path) as source:
-        audio_data = recognizer.record(source)
+# ──────────────────────  HUGGING FACE GENERATION  ─────────────────────────────
+HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"}
 
+SYSTEM_PROMPT = (
+    "You are a compassionate mental-health assistant. "
+    "NEVER repeat the user's words verbatim. "
+    "If the user asks self-harm or violent questions, respond with empathy "
+    "and encourage seeking professional help. Otherwise, answer briefly, "
+    "supportively, and positively.\n\n"
+)
+
+def generate_mistral(user_msg:str)->str:
+    payload = {
+        "inputs":  SYSTEM_PROMPT + f"User: {user_msg}\nAssistant:",
+        "parameters": {
+            "max_new_tokens": 160,
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "stop": ["User:", "\n\n"]
+        }
+    }
+    r = requests.post(MODEL_URL, headers=HEADERS, data=json.dumps(payload), timeout=40)
+    r.raise_for_status()
+    text = r.json()[0]["generated_text"]
+    # Grab everything after the last "Assistant:" (robust to reuse of system prompt)
+    reply = text.split("Assistant:")[-1].strip()
+    # Strip any accidental echo
+    return reply.replace(user_msg, "").strip()
+
+# ───────────────────────────  VOICE INPUT  ────────────────────────────────────
+st.subheader("🎤 Voice Input (WAV)")
+audio_file = st.file_uploader("Upload a WAV file", type=["wav"], label_visibility="collapsed")
+initial_text = ""
+
+if audio_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+        tmp.write(audio_file.read())
+        wav_path = tmp.name
+    r = sr.Recognizer()
+    with sr.AudioFile(wav_path) as source:
+        audio = r.record(source)
     try:
-        text = recognizer.recognize_google(audio_data)
-        st.success(f"Recognized Text: {text}")
+        initial_text = r.recognize_google(audio)
+        st.success(f"Recognised: “{initial_text}”")
     except sr.UnknownValueError:
-        st.error("Could not understand the audio")
+        st.error("Could not understand the audio.")
     except sr.RequestError:
-        st.error("Speech recognition service failed")
+        st.error("Speech-recognition service failed.")
 
-# --- Text Input ---
-user_input = st.text_input("🗣️ Or type your message:", text)
+# ─────────────────────────────  TEXT INPUT  ───────────────────────────────────
+user_input = st.text_input("🗣️ Or type your message:", value=initial_text)
 
-# Reset options if input changes
+# Auto-reset feature toggles when the text changes
 if user_input and user_input != st.session_state.last_input:
-    st.session_state.show_sentiment = False
-    st.session_state.show_affirmations = False
-    st.session_state.show_meditation = False
+    for k in ("show_sentiment", "show_affirmations", "show_meditation"):
+        st.session_state[k] = False
     st.session_state.last_input = user_input
 
-# --- Sentiment Analysis ---
+# ─────────────────────────  SENTIMENT  ────────────────────────────────────────
 if st.session_state.show_sentiment and user_input:
-    sentiment = TextBlob(user_input).sentiment.polarity
-    if sentiment > 0:
-        st.info("😊 Sentiment: Positive")
-    elif sentiment < 0:
-        st.info("☹️ Sentiment: Negative")
-    else:
-        st.info("😐 Sentiment: Neutral")
+    pol = TextBlob(user_input).sentiment.polarity
+    if   pol >  0.1: st.info("😊 Sentiment: Positive")
+    elif pol < -0.1: st.info("☹️ Sentiment: Negative")
+    else:            st.info("😐 Sentiment: Neutral")
 
-# --- Chatbot Response ---
+# ───────────────────────  MAIN RESPONSE FLOW  ────────────────────────────────
 if user_input:
-    with st.spinner("Thinking..."):
-        if is_sensitive_message(user_input):
+    with st.spinner("Thinking…"):
+        if in_crisis(user_input):
             st.markdown("### ⚠️ Crisis Alert")
-            st.warning("🚨 It sounds like you're in crisis. Please seek immediate help:\n\n📞 **Suicide Prevention Helpline India**: 9152987821\n🌐 [Find help near you](https://findahelpline.com)")
+            st.warning(
+                "It sounds like you're in a very difficult place. "
+                "You **matter** and you’re **not alone**.\n\n"
+                "• **India (AASRA 24×7): 915 298 7821**\n"
+                "• Worldwide helplines: <https://findahelpline.com>\n\n"
+                "Consider talking to a trusted friend or a professional right now."
+            )
         else:
             try:
-                response = generate_safe_response(user_input)
+                bot_reply = generate_mistral(user_input)
                 st.markdown("### 🤖 AI Response")
-                st.write(response)
+                st.write(bot_reply if bot_reply else "I'm here to listen.")
             except Exception as e:
-                st.error("Something went wrong while generating the response.")
+                st.error(f"Generation failed: {e}")
 
-# --- Affirmations ---
+# ──────────────────  OPTIONAL EXTRAS (AFFIRM & MEDITATE)  ─────────────────────
 if st.session_state.show_affirmations:
     st.markdown("### 🌟 Positive Affirmations")
-    affirmations = [
+    st.write(np.random.choice([
         "You are capable and strong.",
         "Your feelings are valid.",
         "You are not alone.",
         "You can handle anything that comes your way.",
-        "This too shall pass."
-    ]
-    st.write(np.random.choice(affirmations))
+        "This too shall pass.",
+        "You deserve kindness, especially from yourself."
+    ]))
 
-# --- Guided Meditation ---
 if st.session_state.show_meditation:
     st.markdown("### 🧘 Guided Meditation")
-    st.markdown("""
-    Take a deep breath in... and out.  
-    Let go of tension.  
-    Feel the air fill your lungs.  
-    You are safe, calm, and in control.  
-    Let your thoughts drift like clouds.  
-    Return to the present moment gently.
-    """)
+    st.markdown(
+        "Sit comfortably, close your eyes, and take a slow breath in … and out …\n\n"
+        "Notice the chair beneath you. Let your shoulders drop. Let thoughts float "
+        "by like clouds. You are safe, and this moment belongs to you."
+    )
+###############################################################################
