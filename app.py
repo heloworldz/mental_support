@@ -7,7 +7,7 @@ from textblob import TextBlob
 import numpy as np
 import speech_recognition as sr
 import tempfile
-
+hf_token = st.secrets["hf_token"]
 st.set_page_config(page_title="Mental Health Chatbot", layout="centered")
 
 @st.cache_resource
