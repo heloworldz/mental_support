@@ -18,5 +18,10 @@ def query_hf_api(prompt):
         return f"API error: {response.status_code}"
 
 # Later in your code, replace:
-response = query_hf_api(user_input)
+user_input = st.text_input("Your message:")
+
+if user_input:
+    response = query_hf_api(user_input)
+    st.write(response)
+
 st.write(response)
