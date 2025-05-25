@@ -1,65 +1,47 @@
 import streamlit as st
 import requests
-import json
 import re
 from textblob import TextBlob
-import nltk
-nltk.download('punkt')
 
-# -------------- Config -------------------
-HF_TOKEN = st.secrets["HF_TOKEN"]
-MODEL_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+MODEL_API_URL = "https://api-inference.huggingface.co/models/emozilla/mental-health-ai"
 
-HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"}
+# No token needed for free models on Hugging Face (if public)
+HEADERS = {}
 
-# System prompt to steer the AI towards compassionate mental health support
-SYSTEM_PROMPT = (
-    "You are a compassionate mental-health assistant. "
-    "Never repeat the user's words verbatim. "
-    "If the user talks about self-harm or violent thoughts, respond with empathy "
-    "and encourage seeking professional help. "
-    "Answer briefly, supportively, and positively.\n\n"
-)
-
-# Regex pattern for crisis detection
+# Regex for basic crisis detection
 CRISIS_PATTERN = re.compile(
-    r"\b(kill\s+myself|suicid(?:e|al)|end\s+my\s+life|die\s+by\s+suicide|"
-    r"don't\s+want\s+to\s+live|take\s+my\s+own\s+life|hurt\s+myself)\b", re.I
+    r"\b(kill\s+myself|suicid(?:e|al)|end\s+my\s+life|don't\s+want\s+to\s+live|"
+    r"take\s+my\s+own\s+life|hurt\s+myself|die)\b", re.I
 )
-
-# ----------- Functions -------------------
 
 def is_crisis(text: str) -> bool:
     return bool(CRISIS_PATTERN.search(text))
 
 def query_model(user_input: str) -> str:
-    prompt = SYSTEM_PROMPT + f"User: {user_input}\nAssistant:"
+    prompt = f"User: {user_input}\nTherapist:"
     payload = {
         "inputs": prompt,
         "parameters": {
-            "max_new_tokens": 120,
-            "temperature": 0.3,
-            "top_p": 0.85,
-            "stop": ["User:", "\n\n"]
+            "max_new_tokens": 150,
+            "temperature": 0.6,
+            "top_p": 0.9,
+            "stop": ["User:", "\n"]
         }
     }
-    response = requests.post(MODEL_API_URL, headers=HEADERS, json=payload, timeout=40)
+    response = requests.post(MODEL_API_URL, headers=HEADERS, json=payload, timeout=30)
     response.raise_for_status()
     result = response.json()
-    text = result[0].get("generated_text", "")
-    reply = text.split("Assistant:")[-1].strip()
-    return reply.replace(user_input, "").strip() or "I'm here to listen."
+    return result[0]["generated_text"].split("Therapist:")[-1].strip()
 
-# ----------- Streamlit UI -----------------
-
-st.set_page_config(page_title="AI Mental Health Chatbot", layout="centered")
+# --- Streamlit UI ---
+st.set_page_config(page_title="🧠 AI Mental Health Chatbot", layout="centered")
 st.title("🧠 AI Mental Health Chatbot")
-st.caption("Supportive, non-clinical conversation. For emergencies, call your local helpline.")
+st.caption("Free, empathetic mental health support (not a replacement for professional help)")
 
 user_message = st.text_input("Type your message here:")
 
 if user_message:
-    # Show sentiment
+    # Sentiment
     polarity = TextBlob(user_message).sentiment.polarity
     if polarity > 0.1:
         st.info("😊 Sentiment: Positive")
@@ -68,19 +50,31 @@ if user_message:
     else:
         st.info("😐 Sentiment: Neutral")
 
+    # Check for crisis
     if is_crisis(user_message):
         st.warning(
             "⚠️ It sounds like you're in a very difficult place. "
-            "You **matter** and you’re **not alone**.\n\n"
-            "• **India (AASRA 24×7): 915 298 7821**\n"
-            "• Worldwide helplines: https://findahelpline.com\n\n"
-            "Please consider talking to a trusted friend or professional."
+            "You're **not alone** and help is available.\n\n"
+            "• India (AASRA 24×7): 9152987821\n"
+            "• Worldwide helplines: https://findahelpline.com"
         )
-    else:
-        with st.spinner("Generating response..."):
-            try:
-                reply = query_model(user_message)
-                st.markdown("### 🤖 AI Response")
-                st.write(reply)
-            except Exception as e:
-                st.error(f"Error contacting model API: {e}")
+        st.stop()
+
+    with st.spinner("Thinking..."):
+        try:
+            response = query_model(user_message)
+            st.markdown("### 🤖 AI Response")
+            st.write(response)
+        except Exception as e:
+            st.error(f"Something went wrong: {e}")
+
+# Optional: Add self-care tips
+if st.button("🩺 Show Self-care Tips"):
+    st.markdown("""
+    ### 🩺 Self-Care Tips
+    - 🧘 Practice deep breathing or meditation
+    - 🏃 Go for a short walk
+    - 📖 Write down your thoughts
+    - 🗣️ Talk to someone you trust
+    - 💧 Drink water and eat well
+    """)
