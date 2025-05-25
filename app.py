@@ -3,7 +3,8 @@ import os
 import streamlit as st
 
 HF_TOKEN = os.getenv("hf_token")
-API_URL = "https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf"
+API_URL = "https://api-inference.huggingface.co/models/meta-llama/Llama-2-13b-chat-hf"
+
 st.write(f"Token loaded? {'Yes' if HF_TOKEN else 'No'}")
 
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
