@@ -1,5 +1,6 @@
 import os
-os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+os.environ["XDG_CONFIG_HOME"] = "/tmp"
+
 
 import streamlit as st
 from transformers import pipeline
