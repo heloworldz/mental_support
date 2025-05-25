@@ -115,11 +115,14 @@ if user_input:
     with st.spinner("Thinking..."):
         if is_sensitive_message(user_input):
             st.markdown("### ⚠️ Crisis Alert")
-            st.warning("It sounds like you're going through a very difficult time. You're not alone. Please consider reaching out to a mental health professional or crisis helpline.")
+            st.warning("🚨 It sounds like you're in crisis. Please seek immediate help:\n\n📞 **Suicide Prevention Helpline India**: 9152987821\n🌐 [Find help near you](https://findahelpline.com)")
         else:
-            response = generate_safe_response(user_input)
-            st.markdown("### 🤖 AI Response")
-            st.write(response)
+            try:
+                response = generate_safe_response(user_input)
+                st.markdown("### 🤖 AI Response")
+                st.write(response)
+            except Exception as e:
+                st.error("Something went wrong while generating the response.")
 
 # --- Affirmations ---
 if st.session_state.show_affirmations:
