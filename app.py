@@ -1,5 +1,6 @@
 import requests
 import os
+import streamlit as st
 
 HF_TOKEN = os.getenv("HF_TOKEN")
 API_URL = "https://api-inference.huggingface.co/models/distilgpt2"
