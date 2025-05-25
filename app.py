@@ -66,7 +66,7 @@ if show_sentiment and user_input:
 if user_input:
     with st.spinner("Thinking..."):
         try:
-            response = generator(user_input, max_length=100, do_sample=True, temperature=0.7)[0]['generated_text']
+            response = generator(user_input, max_length=150, do_sample=True, temperature=0.9)[0]['generated_text']
             st.markdown("### 🤖 AI Response")
             st.write(response)
         except Exception as e:
